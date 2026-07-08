@@ -65,8 +65,8 @@ const argv = yargs
     description: 'Skip creation of zones that are the same since now',
     type: 'boolean'
   })
-  .option('skip_now_centroids', {
-    description: 'Skip creation of the now zones geographic centroid lookup',
+  .option('skip_centroids', {
+    description: 'Skip creation of the zone geographic centroid lookup',
     type: 'boolean'
   })
   .option('skip_analyze_diffs', {
@@ -1749,14 +1749,12 @@ function writeCombinedZoneLookup (product, cfg, withOceans, cb) {
   )
 }
 
-// Write a lookup of each "now" timezone id to the geographic centroid
-// ([lng, lat]) of that zone's own boundary. The keys mirror the "now" names
-// file; the point is the centroid of the named zone's individual (comprehensive)
-// boundary rather than of the larger set of zones merged into it, so it stays
-// near the named region.
-function writeNowCentroids (cb) {
+// Write a lookup of each timezone id to the geographic centroid ([lng, lat]) of
+// its boundary. The keys mirror the comprehensive names file; each point is the
+// centroid of that individual zone's own boundary.
+function writeCentroids (cb) {
   const centroids = {}
-  Object.keys(zoneCfgNow).forEach(tzid => {
+  Object.keys(zoneCfg).forEach(tzid => {
     const geom = finalZones[tzid]
     if (!geom) {
       console.warn(`No boundary found for ${tzid}; skipping centroid`)
@@ -1770,7 +1768,7 @@ function writeNowCentroids (cb) {
     centroids[tzid] = centroid
   })
   fs.writeFile(
-    path.join(distDir, 'timezone-names-Now-with-centroids.json'),
+    path.join(distDir, 'timezone-names-with-centroids.json'),
     JSON.stringify(centroids),
     cb
   )
@@ -1896,13 +1894,13 @@ const autoScript = {
     overallProgress.beginTask('Zipping geojson files')
     zipGeoJsonFiles(cb)
   }],
-  makeNowCentroids: ['validateZones', function (results, cb) {
-    if (argv.skip_now_zones || argv.skip_now_centroids) {
-      overallProgress.beginTask('Skipping now zone centroids')
+  makeCentroids: ['validateZones', function (results, cb) {
+    if (argv.skip_centroids) {
+      overallProgress.beginTask('Skipping zone centroids')
       return cb()
     }
-    overallProgress.beginTask('Writing now zone centroids to file')
-    writeNowCentroids(cb)
+    overallProgress.beginTask('Writing zone centroids to file')
+    writeCentroids(cb)
   }],
   makeShapefiles: ['mergeAndWriteZones', function (results, cb) {
     if (argv.skip_shapefile) {
