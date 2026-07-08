@@ -24,6 +24,7 @@ const yargs = require('yargs')
 
 const FeatureWriterStream = require('./util/featureWriterStream')
 const ProgressStats = require('./util/progressStats')
+const geometryCentroid = require('./util/centroid')
 const { FileCache, FileLookupCache } = require('./util/cache')
 
 let osmBoundarySources = require('./osmBoundarySources.json')
@@ -62,6 +63,10 @@ const argv = yargs
   })
   .option('skip_now_zones', {
     description: 'Skip creation of zones that are the same since now',
+    type: 'boolean'
+  })
+  .option('skip_now_centroids', {
+    description: 'Skip creation of the now zones geographic centroid lookup',
     type: 'boolean'
   })
   .option('skip_analyze_diffs', {
@@ -1744,6 +1749,35 @@ function writeCombinedZoneLookup (product, cfg, withOceans, cb) {
   )
 }
 
+// Write a lookup of each "now" timezone id to the geographic centroid
+// ([lng, lat]) of its boundary. Reads the already-combined now geojson so no
+// geometry needs to be recomputed.
+function writeNowCentroids (cb) {
+  let featureCollection
+  try {
+    featureCollection = JSON.parse(
+      fs.readFileSync(path.join(workingDir, 'combined-now.json'))
+    )
+  } catch (err) {
+    return cb(err)
+  }
+  const centroids = {}
+  featureCollection.features.forEach(feature => {
+    const tzid = feature.properties.tzid
+    const centroid = geometryCentroid(feature.geometry)
+    if (!centroid) {
+      console.warn(`Could not compute a centroid for ${tzid}; skipping`)
+      return
+    }
+    centroids[tzid] = centroid
+  })
+  fs.writeFile(
+    path.join(distDir, 'timezone-names-Now-with-centroids.json'),
+    JSON.stringify(centroids),
+    cb
+  )
+}
+
 const autoScript = {
   makeCacheDirAndFns: function (cb) {
     overallProgress.beginTask(`Creating downloads dir (${downloadsDir})`)
@@ -1863,6 +1897,14 @@ const autoScript = {
     }
     overallProgress.beginTask('Zipping geojson files')
     zipGeoJsonFiles(cb)
+  }],
+  makeNowCentroids: ['mergeAndWriteZones', function (results, cb) {
+    if (argv.skip_now_zones || argv.skip_now_centroids) {
+      overallProgress.beginTask('Skipping now zone centroids')
+      return cb()
+    }
+    overallProgress.beginTask('Writing now zone centroids to file')
+    writeNowCentroids(cb)
   }],
   makeShapefiles: ['mergeAndWriteZones', function (results, cb) {
     if (argv.skip_shapefile) {
