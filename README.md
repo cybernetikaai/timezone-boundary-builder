@@ -108,6 +108,8 @@ For the comprehensive datasets, this release file is simply a single array with 
 
 For the "Same since 1970" and "Same since now" datasets, the JSON contents include an object with a key for each merged timezone identifier. The value associated with each of these keys includes an array of strings of the associated timezone identifiers from the comprehensive dataset that had similar timekeeping methods that were merged together.
 
+One additional file, `timezone-names-with-centroids.json`, is an object keyed by timezone identifier whose value is the `[longitude, latitude]` centroid of that zone's boundary. Centroids are area-weighted and computed in planar coordinates, so for multi-part or pole-wrapping zones (such as the Antarctica zones) the point may fall outside the boundary.
+
 #### input-data.zip ####
 
 Each release includes the input and cached data used to generate the timezone boundary files. This includes the raw data downloaded from OpenStreetMap and the definition files within this project at the time of the release. Additionally, as of 2023d it also includes the cached data to facilitate quicker recomputation. The preparation phase of each release is so far still manual and therefore may include files downloaded on different days. This has been included in releases starting from release 2020a.

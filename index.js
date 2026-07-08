@@ -24,6 +24,7 @@ const yargs = require('yargs')
 
 const FeatureWriterStream = require('./util/featureWriterStream')
 const ProgressStats = require('./util/progressStats')
+const geometryCentroid = require('./util/centroid')
 const { FileCache, FileLookupCache } = require('./util/cache')
 
 let osmBoundarySources = require('./osmBoundarySources.json')
@@ -62,6 +63,10 @@ const argv = yargs
   })
   .option('skip_now_zones', {
     description: 'Skip creation of zones that are the same since now',
+    type: 'boolean'
+  })
+  .option('skip_centroids', {
+    description: 'Skip creation of the zone geographic centroid lookup',
     type: 'boolean'
   })
   .option('skip_analyze_diffs', {
@@ -1744,6 +1749,31 @@ function writeCombinedZoneLookup (product, cfg, withOceans, cb) {
   )
 }
 
+// Write a lookup of each timezone id to the geographic centroid ([lng, lat]) of
+// its boundary. The keys mirror the comprehensive names file; each point is the
+// centroid of that individual zone's own boundary.
+function writeCentroids (cb) {
+  const centroids = {}
+  Object.keys(zoneCfg).forEach(tzid => {
+    const geom = finalZones[tzid]
+    if (!geom) {
+      console.warn(`No boundary found for ${tzid}; skipping centroid`)
+      return
+    }
+    const centroid = geometryCentroid(geomToGeoJson(geom))
+    if (!centroid) {
+      console.warn(`Could not compute a centroid for ${tzid}; skipping`)
+      return
+    }
+    centroids[tzid] = centroid
+  })
+  fs.writeFile(
+    path.join(distDir, 'timezone-names-with-centroids.json'),
+    JSON.stringify(centroids),
+    cb
+  )
+}
+
 const autoScript = {
   makeCacheDirAndFns: function (cb) {
     overallProgress.beginTask(`Creating downloads dir (${downloadsDir})`)
@@ -1863,6 +1893,14 @@ const autoScript = {
     }
     overallProgress.beginTask('Zipping geojson files')
     zipGeoJsonFiles(cb)
+  }],
+  makeCentroids: ['validateZones', function (results, cb) {
+    if (argv.skip_centroids) {
+      overallProgress.beginTask('Skipping zone centroids')
+      return cb()
+    }
+    overallProgress.beginTask('Writing zone centroids to file')
+    writeCentroids(cb)
   }],
   makeShapefiles: ['mergeAndWriteZones', function (results, cb) {
     if (argv.skip_shapefile) {
