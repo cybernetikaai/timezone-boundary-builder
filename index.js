@@ -1750,21 +1750,19 @@ function writeCombinedZoneLookup (product, cfg, withOceans, cb) {
 }
 
 // Write a lookup of each "now" timezone id to the geographic centroid
-// ([lng, lat]) of its boundary. Reads the already-combined now geojson so no
-// geometry needs to be recomputed.
+// ([lng, lat]) of that zone's own boundary. The keys mirror the "now" names
+// file; the point is the centroid of the named zone's individual (comprehensive)
+// boundary rather than of the larger set of zones merged into it, so it stays
+// near the named region.
 function writeNowCentroids (cb) {
-  let featureCollection
-  try {
-    featureCollection = JSON.parse(
-      fs.readFileSync(path.join(workingDir, 'combined-now.json'))
-    )
-  } catch (err) {
-    return cb(err)
-  }
   const centroids = {}
-  featureCollection.features.forEach(feature => {
-    const tzid = feature.properties.tzid
-    const centroid = geometryCentroid(feature.geometry)
+  Object.keys(zoneCfgNow).forEach(tzid => {
+    const geom = finalZones[tzid]
+    if (!geom) {
+      console.warn(`No boundary found for ${tzid}; skipping centroid`)
+      return
+    }
+    const centroid = geometryCentroid(geomToGeoJson(geom))
     if (!centroid) {
       console.warn(`Could not compute a centroid for ${tzid}; skipping`)
       return
@@ -1898,7 +1896,7 @@ const autoScript = {
     overallProgress.beginTask('Zipping geojson files')
     zipGeoJsonFiles(cb)
   }],
-  makeNowCentroids: ['mergeAndWriteZones', function (results, cb) {
+  makeNowCentroids: ['validateZones', function (results, cb) {
     if (argv.skip_now_zones || argv.skip_now_centroids) {
       overallProgress.beginTask('Skipping now zone centroids')
       return cb()

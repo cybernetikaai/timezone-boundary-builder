@@ -37,8 +37,13 @@ Shape — object keyed by tzid, value is `[lng, lat]` (GeoJSON coordinate order)
 
 - Coordinates rounded to 5 decimal places (~1 m), which is far finer than the
   centroid's meaningfulness and keeps the file small.
-- Keys mirror the features present in `combined-now.json`, which are the same
-  canonical zones that key `timezone-names-Now.json`.
+- Keys are the canonical zones that key `timezone-names-Now.json`
+  (`Object.keys(zoneCfgNow)`).
+- The point is the centroid of the **named zone's own (comprehensive) boundary**,
+  NOT of the larger set of zones merged into it under the "now" grouping. For
+  example `America/New_York` represents 15 merged zones in the "now" dataset, but
+  its centroid is computed from New York's individual boundary alone so the point
+  stays in New York rather than being pulled north into Canada by the merged set.
 
 ## Centroid definition
 
@@ -55,27 +60,35 @@ for this "geocentroid" request.
 ## Approach (gentle / additive)
 
 A single new, self-contained task in `index.js`'s `autoScript`,
-`makeNowCentroids`, that depends on `mergeAndWriteZones` (so the combined file is
-already on disk):
+`makeNowCentroids`, that depends on `validateZones` (which calls
+`loadFinalZonesIntoMemory`, populating `finalZones` with each zone's individual
+boundary):
 
-1. Read `workingDir/combined-now.json`.
-2. For each feature, convert its geometry to a jsts geometry (reusing the
-   existing `geoJsonToGeom` helper) and call `.getCentroid()`.
+1. For each `tzid` in `zoneCfgNow` (the keys of the "now" names file), take its
+   individual boundary from the in-memory `finalZones[tzid]`.
+2. Convert it to GeoJSON with the existing `geomToGeoJson` helper and pass it to
+   the `util/centroid.js` helper (`geometryCentroid`).
 3. Build `{ tzid: [round(lng), round(lat)] }` and write it to
    `distDir/timezone-names-Now-with-centroids.json`.
 
-No existing function or output file is modified. Guarded by the existing
-`--skip_now_zones` flag (if now zones are skipped there is no `combined-now.json`
-to read) plus a new `--skip_now_centroids` flag consistent with the other
-`--skip_*` options.
+No existing function or output file is modified, and no geometry is re-read from
+disk (the in-memory `finalZones` are reused). Guarded by the existing
+`--skip_now_zones` flag plus a new `--skip_now_centroids` flag consistent with
+the other `--skip_*` options.
 
 ## Testing
 
-Since a full build requires network + hours of processing, the centroid logic is
-verified in isolation against a small GeoJSON fixture (known shapes with
-hand-checkable centroids: a square, an L-shape, a two-part MultiPolygon), asserting
-`[lng, lat]` order, rounding, and area-weighting. This keeps the change verifiable
-without running the whole pipeline.
+A full build requires network + hours of processing, so verification is done in
+two cheaper steps:
+
+1. The `geometryCentroid` helper is checked against small GeoJSON fixtures with
+   hand-checkable centroids (a square, a wide rectangle, a two-part MultiPolygon),
+   asserting `[lng, lat]` order, 5-decimal rounding, and area-weighting.
+2. The end-to-end lookup is confirmed against the released comprehensive GeoJSON
+   for a real release (2026b): compute a centroid for every "now" name and check
+   the keys line up with the released `timezone-names-Now.json` and that
+   well-known zones land in the expected region (e.g. `America/New_York` in New
+   York State, `Pacific/Honolulu` near Hawaii).
 
 ## Non-goals
 
