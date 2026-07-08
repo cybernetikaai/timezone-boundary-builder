@@ -108,7 +108,7 @@ For the comprehensive datasets, this release file is simply a single array with 
 
 For the "Same since 1970" and "Same since now" datasets, the JSON contents include an object with a key for each merged timezone identifier. The value associated with each of these keys includes an array of strings of the associated timezone identifiers from the comprehensive dataset that had similar timekeeping methods that were merged together.
 
-One additional file, `timezone-names-with-centroids.json`, pairs every timezone identifier in the comprehensive dataset with the geographic centroid of its boundary. The JSON is an object keyed by timezone identifier whose value is a `[longitude, latitude]` coordinate pair (GeoJSON order). The centroid is the area-weighted center of mass of each individual zone's boundary, computed in planar coordinates; for concave, multi-part, or antimeridian-crossing zones (for example the Antarctica zones that wrap the pole) it is a reasonable representative point but is not guaranteed to fall inside the boundary. This provides a lightweight way to associate a single point with each timezone identifier without downloading the full boundary geometry.
+One additional file, `timezone-names-with-centroids.json`, is an object keyed by timezone identifier whose value is the `[longitude, latitude]` centroid of that zone's boundary. Centroids are area-weighted and computed in planar coordinates, so for multi-part or pole-wrapping zones (such as the Antarctica zones) the point may fall outside the boundary.
 
 #### input-data.zip ####
 
