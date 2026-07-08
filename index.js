@@ -25,6 +25,7 @@ const yargs = require('yargs')
 const FeatureWriterStream = require('./util/featureWriterStream')
 const ProgressStats = require('./util/progressStats')
 const geometryCentroid = require('./util/centroid')
+const geometryBbox = require('./util/bbox')
 const { FileCache, FileLookupCache } = require('./util/cache')
 
 let osmBoundarySources = require('./osmBoundarySources.json')
@@ -1749,29 +1750,47 @@ function writeCombinedZoneLookup (product, cfg, withOceans, cb) {
   )
 }
 
-// Write a lookup of each timezone id to the geographic centroid ([lng, lat]) of
-// its boundary. The keys mirror the comprehensive names file; each point is the
-// centroid of that individual zone's own boundary.
+// Write two lookups of each timezone id to a representative point of its
+// boundary. The keys mirror the comprehensive names file; each value is derived
+// from that individual zone's own boundary.
+//
+//   timezone-names-with-centroids.json       { tzid: [lng, lat] }
+//   timezone-names-with-centroids-bbox.json  { tzid: { c: [lng, lat],
+//                                                      bbox: [minLng, minLat,
+//                                                             maxLng, maxLat] } }
+//
+// The bbox variant carries the same centroid under `c` plus the zone's bounding
+// box, for consumers that need a quick extent as well as a point.
 function writeCentroids (cb) {
   const centroids = {}
+  const centroidsBbox = {}
   Object.keys(zoneCfg).forEach(tzid => {
     const geom = finalZones[tzid]
     if (!geom) {
       console.warn(`No boundary found for ${tzid}; skipping centroid`)
       return
     }
-    const centroid = geometryCentroid(geomToGeoJson(geom))
+    const geoJson = geomToGeoJson(geom)
+    const centroid = geometryCentroid(geoJson)
     if (!centroid) {
       console.warn(`Could not compute a centroid for ${tzid}; skipping`)
       return
     }
     centroids[tzid] = centroid
+    centroidsBbox[tzid] = { c: centroid, bbox: geometryBbox(geoJson) }
   })
-  fs.writeFile(
-    path.join(distDir, 'timezone-names-with-centroids.json'),
-    JSON.stringify(centroids),
-    cb
-  )
+  asynclib.parallel([
+    cb => fs.writeFile(
+      path.join(distDir, 'timezone-names-with-centroids.json'),
+      JSON.stringify(centroids),
+      cb
+    ),
+    cb => fs.writeFile(
+      path.join(distDir, 'timezone-names-with-centroids-bbox.json'),
+      JSON.stringify(centroidsBbox),
+      cb
+    )
+  ], cb)
 }
 
 const autoScript = {
@@ -1899,7 +1918,7 @@ const autoScript = {
       overallProgress.beginTask('Skipping zone centroids')
       return cb()
     }
-    overallProgress.beginTask('Writing zone centroids to file')
+    overallProgress.beginTask('Writing zone centroids and bounding boxes to files')
     writeCentroids(cb)
   }],
   makeShapefiles: ['mergeAndWriteZones', function (results, cb) {

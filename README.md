@@ -110,6 +110,8 @@ For the "Same since 1970" and "Same since now" datasets, the JSON contents inclu
 
 One additional file, `timezone-names-with-centroids.json`, is an object keyed by timezone identifier whose value is the `[longitude, latitude]` centroid of that zone's boundary. Centroids are area-weighted and computed in planar coordinates, so for multi-part or pole-wrapping zones (such as the Antarctica zones) the point may fall outside the boundary.
 
+A companion file, `timezone-names-with-centroids-bbox.json`, is keyed the same way but pairs each centroid with the zone's bounding box: `{ "c": [longitude, latitude], "bbox": [minLongitude, minLatitude, maxLongitude, maxLatitude] }`. The bounding box is computed in planar coordinates with no antimeridian handling, so a zone whose parts straddle the 180° meridian reports a box spanning nearly the whole longitude range.
+
 #### input-data.zip ####
 
 Each release includes the input and cached data used to generate the timezone boundary files. This includes the raw data downloaded from OpenStreetMap and the definition files within this project at the time of the release. Additionally, as of 2023d it also includes the cached data to facilitate quicker recomputation. The preparation phase of each release is so far still manual and therefore may include files downloaded on different days. This has been included in releases starting from release 2020a.
